@@ -812,6 +812,18 @@ struct_amdsmi_power_cap_info_t._fields_ = [
 ]
 
 amdsmi_power_cap_info_t = struct_amdsmi_power_cap_info_t
+
+class struct_amdsmi_cpu_info_t(Structure):
+    pass
+struct_amdsmi_cpu_info_t._pack_ = 1 # source:False
+struct_amdsmi_cpu_info_t._fields_ = [
+    ('cpu_model', ctypes.c_char * 64),
+    ('cpu_family', ctypes.c_char * 32),
+    ('cpu_vendor', ctypes.c_char * 64),8
+    ('reserved', ctypes.c_uint64 * 3),
+]
+amdsmi_cpu_info_t = struct_amdsmi_cpu_info_t
+
 class struct_amdsmi_vbios_info_t(Structure):
     pass
 
@@ -2428,6 +2440,11 @@ amdsmi_get_cpu_model.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
 amdsmi_get_esmi_err_msg = _libraries['libamd_smi.so'].amdsmi_get_esmi_err_msg
 amdsmi_get_esmi_err_msg.restype = amdsmi_status_t
 amdsmi_get_esmi_err_msg.argtypes = [amdsmi_status_t, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+
+amdsmi_get_cpu_info = _libraries['libamd_smi.so'].amdsmi_get_cpu_info
+amdsmi_get_cpu_info.restype = amdsmi_status_t
+amdsmi_get_cpu_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_cpu_info_t)]
+
 __all__ = \
     ['AGG_BW0', 'AMDSMI_AVERAGE_POWER',
     'AMDSMI_CACHE_PROPERTY_CPU_CACHE',
@@ -2817,5 +2834,6 @@ __all__ = \
     'struct_engine_usage_', 'struct_fw_info_list_',
     'struct_memory_usage_', 'struct_pcie_metric_',
     'struct_pcie_static_', 'struct_amdsmi_bdf_t',
+    'amdsmi_cpu_info_t',
     'uint32_t', 'uint64_t', 'uint8_t',
     'union_amdsmi_bdf_t']

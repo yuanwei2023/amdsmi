@@ -123,61 +123,61 @@ amdsmi_status_t AMDSmiSystem::init(uint64_t flags) {
         if (amd_smi_status != AMDSMI_STATUS_SUCCESS)
             return amd_smi_status;
     }
-#ifdef ENABLE_ESMI_LIB
+// #ifdef ENABLE_ESMI_LIB
     if (flags & AMDSMI_INIT_AMD_CPUS) {
         amd_smi_status = populate_amd_cpus();
         if (amd_smi_status != AMDSMI_STATUS_SUCCESS)
             return amd_smi_status;
     }
-#endif
+// #endif
     return AMDSMI_STATUS_SUCCESS;
 
 }
 
-#ifdef ENABLE_ESMI_LIB
-amdsmi_status_t AMDSmiSystem::populate_amd_cpus() {
-    uint32_t sockets, cpus, threads;
-    amdsmi_status_t amd_smi_status;
+// // #ifdef ENABLE_ESMI_LIB
+// amdsmi_status_t AMDSmiSystem::populate_amd_cpus() {
+//     uint32_t sockets, cpus, threads;
+//     amdsmi_status_t amd_smi_status;
 
-    /* esmi is for AMD cpus, if its not AMD CPU, we are not going to initialise esmi */
-    amd_smi_status = static_cast<amdsmi_status_t>(esmi_init());
-    if (amd_smi_status != AMDSMI_STATUS_SUCCESS){
-        std::cout<<"\tESMI Not initialized, drivers not found " << std::endl;
-        return amd_smi_status;
-    }
+//     /* esmi is for AMD cpus, if its not AMD CPU, we are not going to initialise esmi */
+//     amd_smi_status = static_cast<amdsmi_status_t>(esmi_init());
+//     if (amd_smi_status != AMDSMI_STATUS_SUCCESS){
+//         std::cout<<"\tESMI Not initialized, drivers not found " << std::endl;
+//         return amd_smi_status;
+//     }
 
-    amd_smi_status = get_nr_cpu_sockets(&sockets);
-    amd_smi_status = get_nr_cpu_cores(&cpus);
-    amd_smi_status = get_nr_threads_per_core(&threads);
+//     amd_smi_status = get_nr_cpu_sockets(&sockets);
+//     amd_smi_status = get_nr_cpu_cores(&cpus);
+//     amd_smi_status = get_nr_threads_per_core(&threads);
 
-    for(uint32_t i = 0; i < sockets; i++) {
-        std::string cpu_socket_id = std::to_string(i);
-        // Multiple cores may share the same socket
-        AMDSmiSocket* socket = nullptr;
-        for (uint32_t j = 0; j < sockets_.size(); j++) {
-            if (sockets_[j]->get_socket_id() == cpu_socket_id) {
-                socket = sockets_[j];
-                break;
-            }
-        }
-        if (socket == nullptr) {
-            socket = new AMDSmiSocket(cpu_socket_id);
-            sockets_.push_back(socket);
-        }
-        AMDSmiProcessor* cpusocket = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU, i);
-        socket->add_processor(cpusocket);
-        processors_.insert(cpusocket);
+//     for(uint32_t i = 0; i < sockets; i++) {
+//         std::string cpu_socket_id = std::to_string(i);
+//         // Multiple cores may share the same socket
+//         AMDSmiSocket* socket = nullptr;
+//         for (uint32_t j = 0; j < sockets_.size(); j++) {
+//             if (sockets_[j]->get_socket_id() == cpu_socket_id) {
+//                 socket = sockets_[j];
+//                 break;
+//             }
+//         }
+//         if (socket == nullptr) {
+//             socket = new AMDSmiSocket(cpu_socket_id);
+//             sockets_.push_back(socket);
+//         }
+//         AMDSmiProcessor* cpusocket = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU, i);
+//         socket->add_processor(cpusocket);
+//         processors_.insert(cpusocket);
 
-       for (uint32_t k = 0; k < (cpus/threads)/sockets; k++) {
-            AMDSmiProcessor* core = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, k);
-            socket->add_processor(core);
-            processors_.insert(core);
-       }
-    }
+//        for (uint32_t k = 0; k < (cpus/threads)/sockets; k++) {
+//             AMDSmiProcessor* core = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, k);
+//             socket->add_processor(core);
+//             processors_.insert(core);
+//        }
+//     }
 
-    return AMDSMI_STATUS_SUCCESS;
-}
-#endif
+//     return AMDSMI_STATUS_SUCCESS;
+// }
+// // #endif
 
 amdsmi_status_t AMDSmiSystem::populate_amd_gpu_devices() {
     // init rsmi
@@ -228,6 +228,115 @@ amdsmi_status_t AMDSmiSystem::populate_amd_gpu_devices() {
     }
     return AMDSMI_STATUS_SUCCESS;
 }
+
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <set>
+
+amdsmi_status_t AMDSmiSystem::populate_amd_cpu_devices() {
+    std::set<int> socket_ids; // 用于存储唯一的物理插槽ID
+    uint32_t core_count = 0;
+    uint32_t threads_per_core = 0;
+
+    // 遍历每个CPU核心，读取其对应的插槽ID
+    for (const auto& entry : std::filesystem::directory_iterator("/sys/devices/system/cpu/")) {
+        if (entry.is_directory() && entry.path().filename().string().find("cpu") == 0) {
+            std::string physical_package_path = entry.path().string() + "/topology/physical_package_id";
+            std::ifstream package_file(physical_package_path);
+            if (package_file.is_open()) {
+                int package_id;
+                package_file >> package_id;
+                socket_ids.insert(package_id); // 插入集合，确保唯一性
+                package_file.close();
+            }
+        }
+    }
+
+    uint32_t socket_count = socket_ids.size(); // 获取唯一插槽ID的数量作为插槽数量
+
+    // 通过sysfs获取核心数量
+    core_count = std::thread::hardware_concurrency();
+
+    // 通过sysfs获取每核心的线程数量
+    std::ifstream threads_file("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list");
+    if (!threads_file.is_open()) {
+        std::cout << "Failed to open /sys/devices/system/cpu/cpu0/topology/thread_siblings_list" << std::endl;
+        return AMDSMI_STATUS_ERROR;
+    }
+
+    std::string line;
+    if (std::getline(threads_file, line)) {
+        // 例如，内容可能是"0,1"表示每个核心有两个线程
+        threads_per_core = std::count(line.begin(), line.end(), ',') + 1;
+    }
+    threads_file.close();
+
+    // 初始化每个插槽的信息
+    for (uint32_t i = 0; i < socket_count; i++) {
+        std::string socket_id = std::to_string(i);
+        AMDSmiSocket* socket = nullptr;
+
+        // 检查插槽是否已经存在
+        for (size_t j = 0; j < sockets_.size(); j++) {
+            if (sockets_[j]->get_socket_id() == socket_id) {
+                socket = sockets_[j];
+                break;
+            }
+        }
+
+        // 如果插槽不存在，则创建新的插槽对象
+        if (socket == nullptr) {
+            socket = new AMDSmiSocket(socket_id);
+            sockets_.push_back(socket);
+        }
+
+        // 创建一个CPU对象并添加到插槽中
+        AMDSmiProcessor* cpu_device = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU, i);
+        socket->add_processor(cpu_device);
+        processors_.insert(cpu_device);
+
+        // 计算每个插槽上的核心数
+        uint32_t cores_per_socket = core_count / socket_count;
+        for (uint32_t k = 0; k < cores_per_socket; k++) {
+            AMDSmiProcessor* core_device = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, k);
+            socket->add_processor(core_device);
+            processors_.insert(core_device);
+
+            // 为每个核心添加线程信息
+            for (uint32_t t = 0; t < threads_per_core; t++) {
+                AMDSmiProcessor* thread_device = new AMDSmiProcessor(AMDSMI_PROCESSOR_TYPE_AMD_CPU_THREAD, t);
+                core_device->add_processor(thread_device);
+                processors_.insert(thread_device);
+            }
+        }
+    }
+
+    return AMDSMI_STATUS_SUCCESS;
+}
+
+
+amdsmi_status_t AMDSmiSystem::get_cpu_socket_id(uint32_t index, std::string& socket_id) {
+    // 通过读取sysfs文件，获取指定CPU的physical_package_id
+    std::stringstream path;
+    path << "/sys/devices/system/cpu/cpu" << index << "/topology/physical_package_id";
+
+    std::ifstream package_file(path.str());
+    if (!package_file.is_open()) {
+        std::cout << "Failed to open " << path.str() << std::endl;
+        return AMDSMI_STATUS_ERROR;
+    }
+
+    int package_id;
+    package_file >> package_id;
+    package_file.close();
+
+    // 将物理包ID转换为字符串作为插槽ID
+    socket_id = std::to_string(package_id);
+
+    return AMDSMI_STATUS_SUCCESS;
+}
+
 
 amdsmi_status_t AMDSmiSystem::get_gpu_socket_id(uint32_t index,
             std::string& socket_id) {

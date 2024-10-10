@@ -140,12 +140,29 @@ class AMDSMIHelpers():
 
 
     def is_amdgpu_initialized(self):
+        err_code = AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_GPUS
+        if err_code:
+            logging.error('AMDSMI_INIT_AMD_GPUS = true')
+        else:
+            logging.error('AMDSMI_INIT_AMD_GPUS = false')
         return AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_GPUS
 
 
     def is_amd_hsmp_initialized(self):
+        err_code = AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_CPUS
+        if err_code:
+            logging.error('AMDSMI_INIT_AMD_CPUS = true')
+        else:
+            logging.error('AMDSMI_INIT_AMD_CPUS = false')
         return AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_CPUS
 
+    def is_amd_pstate_initialized(self):
+        err_code = AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_CPUS
+        if err_code:
+            logging.error('AMDSMI_INIT_AMD_CPUS = true')
+        else:
+            logging.error('AMDSMI_INIT_AMD_CPUS = false')
+        return AMDSMI_INIT_FLAG & amdsmi_interface.amdsmi_wrapper.AMDSMI_INIT_AMD_CPUS
 
     def get_cpu_choices(self):
         """Return dictionary of possible CPU choices and string of the output:

@@ -1722,6 +1722,24 @@ def amdsmi_get_power_cap_info(
             "min_power_cap": power_info.min_power_cap,
             "max_power_cap": power_info.max_power_cap}
 
+def amdsmi_get_cpu_info(
+    processor_handle: amdsmi_wrapper.amdsmi_processor_handle,
+) ->Dict[str, Any]:
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+    cpu_info = amdsmi_wrapper.amdsmi_get_cpuinfo_t()
+    _check_res(
+        amdsmi_wrapper.amdsmi_get_cpu_info(
+            processor_handle, ctypes.c_uint32(0). ctypes.byref(cpu_info)
+        )
+    )
+
+    return {"cpu_model": cpu_info.cpu_modle,
+            "cpu_family": cpu_info.cpu_family,
+            "cpu_vendor": cpu_info.cpu_vendor}
+
 def amdsmi_get_gpu_pm_metrics_info(
     processor_handle: amdsmi_wrapper.amdsmi_processor_handle,
 ) -> Dict[str, Any]:

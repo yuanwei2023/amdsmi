@@ -32,6 +32,9 @@ from .amdsmi_interface import amdsmi_get_processor_handles
 from .amdsmi_interface import amdsmi_get_socket_handles
 from .amdsmi_interface import amdsmi_get_socket_info
 
+# Device CPU
+from .amdsmi_interface import amdsmi_get_cpu_info
+
 # ESMI Dependent Functions
 try:
     from .amdsmi_interface import amdsmi_get_cpusocket_handles

@@ -621,6 +621,11 @@ typedef struct {
   uint64_t reserved[5];
 } amdsmi_vram_info_t;
 
+typedef struct {
+  char  model_name[AMDSMI_256_LENGTH];
+  char  vendor_id[AMDSMI_NORMAL_STRING_LENGTH];
+} amdsmi_cpu_info_t;
+
 
 typedef struct {
   char  driver_version[AMDSMI_MAX_STRING_LENGTH];
@@ -4724,6 +4729,21 @@ amdsmi_get_gpu_asic_info(amdsmi_processor_handle processor_handle, amdsmi_asic_i
  */
 amdsmi_status_t amdsmi_get_gpu_vram_info(
           amdsmi_processor_handle processor_handle, amdsmi_vram_info_t *info);
+
+/**
+ *  @brief Returns CPU info
+ *
+ *  @platform{gpu_bm_linux}  @platform{host} @platform{guest_1vf}  @platform{guest_mvf}
+ *
+ *  @param[in] processor_handle PF of a processor for which to query
+ *
+ *  @param[out] info Reference to CPU info structure
+ *  Must be allocated by user.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_cpu_info(
+          amdsmi_processor_handle processor_handle, amdsmi_cpu_info_t *info);
 
 /**
  *  @brief          Returns the board part number and board information for the requested device

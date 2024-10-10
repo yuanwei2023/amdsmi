@@ -888,7 +888,9 @@ class AMDSMICommands():
                     break
 
         # Handle CPU and GPU intialization cases
-        if self.helpers.is_amd_hsmp_initialized() and self.helpers.is_amdgpu_initialized():
+        if (self.helpers.is_amd_hsmp_initialized() and
+            self.helpers.is_amdgpu_initialized() and
+            is_amd_pstate_initialized()):
             # Print out all CPU and all GPU static info only if no device was specified.
             # If a GPU or CPU argument is provided only print out the specified device.
             if args.cpu == None and args.gpu == None:
@@ -913,6 +915,11 @@ class AMDSMICommands():
                                     dfc_ucode, fb_info, num_vf, soc_pstate,
                                     process_isolation)
         elif self.helpers.is_amd_hsmp_initialized(): # Only CPU is initialized
+            if args.cpu == None:
+                args.cpu = self.cpu_handles
+
+            self.static_cpu(args, multiple_devices, cpu, interface_ver)
+        elif self.helpers.is_amd_pstate_initialized(): # Only CPU Pstate is initialized
             if args.cpu == None:
                 args.cpu = self.cpu_handles
 

@@ -70,6 +70,7 @@
 #include "amd_smi/impl/amd_smi_utils.h"
 #include "amd_smi/impl/amd_smi_processor.h"
 #include "rocm_smi/rocm_smi_logger.h"
+#include "amd_smi/impl/amd_smi_cpu_device.h"
 
 static bool initialized_lib = false;
 
@@ -102,6 +103,28 @@ static amdsmi_status_t get_gpu_device_from_handle(amdsmi_processor_handle proces
 
     return AMDSMI_STATUS_NOT_SUPPORTED;
 }
+
+static amdsmi_status_t get_cpu_device_from_handle(amdsmi_processor_handle processor_handle,
+            amd::smi::AMDSmiCPUDevice** cpudevice) {
+
+    AMDSMI_CHECK_INIT();
+
+    if (processor_handle == nullptr || cpudevice == nullptr)
+        return AMDSMI_STATUS_INVAL;
+
+    amd::smi::AMDSmiProcessor* device = nullptr;
+    amdsmi_status_t r = amd::smi::AMDSmiSystem::getInstance()
+                    .handle_to_processor(processor_handle, &device);
+    if (r != AMDSMI_STATUS_SUCCESS) return r;
+
+    if (device->get_processor_type() == AMDSMI_PROCESSOR_TYPE_AMD_CPU) {
+        *cpudevice = static_cast<amd::smi::AMDSmiCPUDevice*>(device);
+        return AMDSMI_STATUS_SUCCESS;
+    }
+
+    return AMDSMI_STATUS_NOT_SUPPORTED;
+}
+
 
 template <typename F, typename ...Args>
 amdsmi_status_t rsmi_wrapper(F && f,
@@ -206,6 +229,38 @@ amdsmi_status_t amdsmi_get_socket_handles(uint32_t *socket_count,
     return AMDSMI_STATUS_SUCCESS;
 }
 
+amdsmi_status_t amdsmi_get_cpu_socket_handles(uint32_t *socket_count,
+                amdsmi_socket_handle* socket_handles) {
+
+    AMDSMI_CHECK_INIT();
+
+    if (socket_count == nullptr) {
+        return AMDSMI_STATUS_INVAL;
+    }
+
+    // 获取系统中的CPU插槽列表
+    std::vector<amd::smi::AMDSmiSocket*>& cpu_sockets
+            = amd::smi::AMDSmiSystem::getInstance().get_cpu_sockets();
+    uint32_t cpu_socket_size = static_cast<uint32_t>(cpu_sockets.size());
+
+    // 如果调用者只想获取CPU插槽的数量
+    if (socket_handles == nullptr) {
+        *socket_count = cpu_socket_size;
+        return AMDSMI_STATUS_SUCCESS;
+    }
+
+    // 确定返回的插槽数量，以防止溢出
+    *socket_count = *socket_count >= cpu_socket_size ? cpu_socket_size : *socket_count;
+
+    // 复制插槽句柄到提供的数组中
+    for (uint32_t i = 0; i < *socket_count; i++) {
+        socket_handles[i] = reinterpret_cast<amdsmi_socket_handle>(cpu_sockets[i]);
+    }
+
+    return AMDSMI_STATUS_SUCCESS;
+}
+
+
 amdsmi_status_t amdsmi_get_socket_info(
                 amdsmi_socket_handle socket_handle,
                 size_t len, char *name) {
@@ -225,6 +280,28 @@ amdsmi_status_t amdsmi_get_socket_info(
 
     return AMDSMI_STATUS_SUCCESS;
 }
+
+amdsmi_status_t amdsmi_get_cpu_socket_info(
+                amdsmi_socket_handle socket_handle,
+                size_t len, char *name) {
+    AMDSMI_CHECK_INIT();
+
+    if (socket_handle == nullptr || name == nullptr) {
+        return AMDSMI_STATUS_INVAL;
+    }
+
+    // 获取对应的CPU插槽对象
+    amd::smi::AMDSmiSocket* cpu_socket = nullptr;
+    amdsmi_status_t r = amd::smi::AMDSmiSystem::getInstance()
+                    .handle_to_socket(socket_handle, &cpu_socket);
+    if (r != AMDSMI_STATUS_SUCCESS) return r;
+
+    // 复制插槽名称到输出参数中
+    strncpy(name, cpu_socket->get_socket_id().c_str(), len);
+
+    return AMDSMI_STATUS_SUCCESS;
+}
+
 
 #ifdef ENABLE_ESMI_LIB
 amdsmi_status_t amdsmi_get_processor_info(
@@ -3324,4 +3401,50 @@ amdsmi_status_t amdsmi_get_esmi_err_msg(amdsmi_status_t status, const char **sta
     }
     return AMDSMI_STATUS_SUCCESS;
 }
+
+// amdsmi_status_t amdsmi_get_cpu_info(
+//     amdsmi_processor_handle processor_handle, amdsmi_cpu_info_t *info) {
+//     amdsmi_status_t status;
+//     uint32_t cpu_family;
+//     u_int32_t family;
+
+//     AMDSMI_CHECK_INIT();
+
+
+//     if (info == nullptr) {
+//         return AMDSMI_STATUS_INVAL;
+//     }
+
+//     amd::smi::AMDSmiCPUDevice* cpu_device = nullptr;
+
+//     status = amd::smi::AMDSmiSystem::getInstance().get_cpu_info(&family);
+//     if (status != AMDSMI_STATUS_SUCCESS)
+//         return amdsmi_errno_to_esmi_status(status);
+
+//     *cpu_family = family;
+
+//     return AMDSMI_STATUS_SUCCESS;
+// }
+
+
+// amdsmi_status_t amdsmi_get_cpu_info(amdsmi_processor_handle processor_handle,
+//                 uint32_t *metrics_version)
+// {
+//     amdsmi_status_t status;
+//     uint32_t cpu_info;
+
+//     AMDSMI_CHECK_INIT();
+
+//     if (processor_handle == nullptr)
+//         return AMDSMI_STATUS_INVAL;
+
+//     status = static_cast<amdsmi_status_t>(cpu_metrics_info_get(&metrics_tbl_ver));
+//     if (status != AMDSMI_STATUS_SUCCESS)
+//         return amdsmi_errno_to_esmi_status(status);
+
+//     *metrics_version = metrics_tbl_ver;
+
+//     return AMDSMI_STATUS_SUCCESS;
+// }
+
 #endif
